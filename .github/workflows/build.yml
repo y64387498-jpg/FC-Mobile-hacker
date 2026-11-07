@@ -1,0 +1,65 @@
+
+name: FC Mobile Hub APK Builder
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Extract Android project
+        run: |
+          set -e
+          mkdir -p extracted
+          unzip -q FCMobileHub-Fixed.zip -d extracted
+
+          echo "ZIP contents:"
+          find extracted -maxdepth 4 -type f | head -100
+
+          PROJECT=$(find extracted -type f -name gradlew \
+            -print -quit | xargs -r dirname)
+
+          if [ -z "$PROJECT" ]; then
+            echo "ERROR: ZIP içinde Gradle Wrapper bulunamadı."
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
+
+      - name: Setup Android components
+        run: |
+          sdkmanager --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Build APK
+        run: |
+          cd "$PROJECT_DIR"
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FC-Mobile-Hub-APK
+          path: extracted/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
